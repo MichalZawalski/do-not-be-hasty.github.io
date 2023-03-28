@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="description" content="Hierarchical search for complex reasoning tasks.">
+    <meta name="author" content="Awarelab">
+    <title>Adaptive Subgoal Search</title>
+
+    <!-- font icons -->
+    <link rel="stylesheet" href="assets/vendors/themify-icons/css/themify-icons.css">
+
+    <!-- Bootstrap + Creative Studio main styles -->
+    <link rel="stylesheet" href="assets/css/creative-studio.css">
+
+</head>
+<body data-spy="scroll" data-target=".navbar" data-offset="40" id="home">
+    
+    <!-- Page Navigation -->
+    <nav class="navbar custom-navbar navbar-expand-lg navbar-dark" data-spy="affix" data-offset-top="20">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+<!--                 <img src="assets/imgs/logo.png" alt="Download free bootstrap 4 landing page, free boootstrap 4 templates, Download free bootstrap 4.1 landing page, free boootstrap 4.1.1 templates, Creative studio Landing page"> -->
+            </a>
+            <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+                <span></span>
+            </button>
+
+            <div class="collapse navbar-collapse" id="navbarSupportedContent">
+                <ul class="navbar-nav ml-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#home">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#intro">Abstract</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#environments">Environments</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#adasubs">Method</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#experiments">Experiments</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#generating">Demos</a>
+                    </li>
+                    <!--<li class="nav-item">
+                        <a class="nav-link btn btn-primary btn-sm ml-lg-3" href="components.html">Components</a>
+                    </li>-->
+                </ul>
+            </div>
+        </div>
+    </nav>
+    <!-- End Of Page Navigation -->
+
+    <!-- Page Header -->
+    <header class="header">
+        <div class="overlay">
+            <h6 class="subtitle">Adjusting Planning Horizon with</h6>
+            <h1 class="title">Adaptive Subgoal Search</h1>
+            <div class="row" style="width: 65%">
+                <div style="width: 33.333%"><h6 class="main_author">Michał Zawalski</h6></div>
+                <div style="width: 33.333%"><h6 class="main_author">Michał Tyrolski</h6></div>
+                <div style="width: 33.333%"><h6 class="main_author">Konrad Czechowski</h6></div>
+            </div>
+            <div class="row" style="width: 65%">
+                <div style="width: 33.333%"><h6 class="author">Tomasz Odrzygóźdź</h6></div>
+                <div style="width: 33.333%"><h6 class="author">Damian Stachura</h6></div>
+                <div style="width: 33.333%"><h6 class="author">Piotr Piękos</h6></div>
+            </div>
+            <div class="row" style="width: 65%">
+                <div style="width: 33.333%"><h6 class="author">Yuhuai Wu</h6></div>
+                <div style="width: 33.333%"><h6 class="author">Łukasz Kuciński</h6></div>
+                <div style="width: 33.333%"><h6 class="author">Piotr Miłoś</h6></div>
+            </div>
+            <h6 class="conference"><b>ICLR 2023, notable-top-5%</b></h6>
+            <div class="buttons text-center">
+                <a href="https://arxiv.org/abs/2206.00702?context=cs" class="btn btn-primary rounded w-lg btn-lg my-1">Publication</a>
+                <a href="https://github.com/AdaptiveSubgoalSearch/adaptive_subs" class="btn btn-outline-light rounded w-lg btn-lg my-1">GitHub</a>
+                <a href="https://drive.google.com" class="btn btn-outline-light rounded w-lg btn-lg my-1">Try it yourself!</a>
+            </div>              
+        </div>      
+    </header>
+    <!-- End Of Page Header -->
+
+    <!-- TLDR points -->
+    <div class="box text-center">
+    <!--  ti-target   ti-vector  ti-stats-up  ti-settings  ti-export  ti-crown  ti-dashboard  ti-rocket  ti-cup  ti-bar-chart  ti-share  -->
+        <div class="box-item">
+            <i class="ti-bar-chart"></i>
+            <h6 class="box-title">Solves complex problems</h6>
+            <p>by decomposing them into subgoals and planning with high-level steps.</p>
+        </div>
+        <div class="box-item">
+            <i class="ti-vector"></i>
+            <h6 class="box-title">Adapts to the local complexity</h6>
+            <p>by choosing the appropriate distance for generating subgoals.</p>
+        </div>
+        <div class="box-item">
+            <i class="ti-share"></i>
+            <h6 class="box-title">Generalizes to out-of-distribution instances</h6>
+            <p>without any additional fine-tuning.</p>
+        </div>
+    </div>
+    <!-- End of TLDR -->
+
+    <!-- Intro Section -->
+    <section id="intro">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-md-5 col-lg-4">
+                    <img src="assets/imgs/main_idea.png" alt="Example subgoals for car driving" class="w-100 img-thumbnail mb-3">
+                    <p>tmp image</p>
+                </div>
+                <div class="col-md-7 col-lg-8">
+<!--                     <h6 class="section-subtitle mb-0">brief</h6> -->
+                    <h6 class="section-title mb-3">Abstract</h6>
+                    <p>Complex reasoning problems contain states that vary in the computational cost required to determine a good action plan. Taking advantage of this property, we propose Adaptive Subgoal Search (AdaSubS), a search method that adaptively adjusts the planning horizon. To this end, AdaSubS generates diverse sets of subgoals at different distances.</p>
+                    <p>A verification mechanism is employed to filter out unreachable subgoals swiftly, allowing to focus on feasible further subgoals. In this way, AdaSubS benefits from the efficiency of planning with longer subgoals and the fine control with the shorter ones, and thus scales well to difficult planning problems.</p>
+                    <p>We show that AdaSubS significantly surpasses hierarchical planning algorithms on three complex reasoning tasks: Sokoban, the Rubik's Cube, and inequality proving benchmark INT.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+    <!-- End of Intro Section -->
+    
+    <!-- Video Section -->
+    <section id="video" class="has-bg-img py-lg">
+        <div id="videoBar" class="container" style="display:none">
+            <video id="introVideo" width="100%" controls>
+                <source src="assets/imgs/intro.ogv" type="video/ogg">
+                Your browser does not support the video tag.
+            </video> 
+        </div>
+        
+        <div id="playBar" class="container text-center">
+            <button type="button" id="playIntroButton" class="btn btn-outline-primary play-control">
+              <i class="ti-control-play" ></i>
+            </button>
+            <h6 class="section-title mt-4">See Our Overview Video</h6>
+
+        </div>
+    </section>
+    <!-- End of Video Section -->
+
+    <!-- Environments -->
+    <!--<section class="has-bg-img py-md">
+        <div class="container text-center">
+            <h6 class="section-subtitle">We Test on</h6>
+            <h6 class="section-title mb-6">Environments with Complex Reasoning</h6>
+            <div class="envs-widget row mb-6">
+                <div class="envs-widget-item col-4">
+                    <img src="assets/imgs/sokoban_icon.png" alt="Sokoban">
+                    <h4>Sokoban</h4>
+                </div>
+                <div class="envs-widget-item col-4">
+                    <img src="assets/imgs/rubik_icon.png" alt="Rubik's Cube">
+                    <h4>Rubik's Cube</h4>
+                </div>
+                <div class="envs-widget-item col-4">
+                    <img src="assets/imgs/int_icon.png" alt="Inequality Theorem Proving">
+                    <h4>Inequality Theorem Proving</h4>
+                </div>
+            </div>
+        </div>
+    </section>-->
+    <!-- End Of Environments -->
+    
+    <!-- Environments Section -->
+    <section id="environments">
+        <div class="container text-center">
+            <h6 class="section-subtitle">We Test on</h6>
+            <h6 class="section-title mb-6">Environments with Complex Reasoning</h6>
+            <div class="envs-widget row mb-6">
+                <div class="envs-widget-item col-4">
+                    <img src="assets/imgs/sokoban_icon.png" alt="Sokoban">
+                    <h4>Sokoban</h4>
+                    <p>Sokoban is a single-player game in which the player controls an agent whose goal is to push the boxes on target locations (scroll down to play). It is difficult due to its combinatorial complexity and the existence of irreversible states. Deciding, if Sokoban boards are solvable, is an NP-hard problem.</p>
+                </div>
+                <div class="envs-widget-item col-4">
+                    <img src="assets/imgs/rubik_icon.png" alt="Rubik's Cube">
+                    <h4>Rubik's Cube</h4>
+                    <p>Rubik’s Cube is a classical 3D combination puzzle. It is challenging due to the fact that the search space has more than 4.3x10<sup>18</sup> configurations.</p>
+                </div>
+                <div class="envs-widget-item col-4">
+                    <img src="assets/imgs/int_icon.png" alt="Inequality Theorem Proving">
+                    <h4>Inequality Theorem Proving</h4>
+                    <p>INT provides a generator of inequalities, which produces mathematical formulas along with their proofs. Proofs are sequences of consecutively applied mathematical axioms. An action in INT is a tuple containing an axiom and its input entities. The action space in this problem can be large, reaching up to 106 elements, which significantly complicates planning.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+    <!-- End of Experiments Section -->
+    
+    <!-- Example trajectory -->
+    <section class="has-bg-img py-md">
+        <div class="container text-center">
+            <h6 class="section-subtitle">An Example</h6>
+            <h6 class="section-title mb-6">Solving Trajectory</h6>
+            <img src="assets/imgs/solving_trajectory.png" alt="Example trajectory" class="w-100">
+            <p>TODO: this can be either a static image of a trajectory (with subgoal highlighted) or an animation of consecutive states and subgoals.</p>
+        </div>
+    </section>
+    <!-- End Of Example trajectory -->
+
+    <!-- AdaSubS Section -->
+    <section id="adasubs">
+        <div class="container">
+            <h6 class="section-subtitle text-center">Details of</h6>
+            <h5 class="section-title text-center mb-6">Adaptive Subgoal Search</h5>
+            <p>AdaSubS utilizes the following key components: subgoal generators, verifier, conditional low-level policy (CLLP), and value function. These components are implemented using trained neural networks. AdaSubS iteratively builds a tree of subgoals reachable from the initial state until the target state is reached or the search budget is depleted. In each iteration, it chooses a node in the tree that is expanded by one of the generators. The chosen generator creates a few subgoal candidates, i.e., states expected to be a few steps closer to the target than the current node. For each of them, we use the verifier and CLLP to check whether they are valid and reachable within a few steps. For the correct subgoals, we compute their value function, place them in the search tree, and the next iteration follows.</p>
+            <p>Perhaps the most important design decision is how to select the next node to be processed and the details of the expansion phase. To this end, AdaSub uses a priority queue of states with the keys being a distance-value pair  (k, v) sorted in lexicographical order. After extracting the max node, we use the corresponding k-generator to create subgoals. For valid s', we estimate its value v' and add s' to the queue once for each generator distance k', i.e., once for each (k', v').</p>
+            <p>Using other queue orderings implements different adaptivity mechanisms. We discuss four possible options in Sec 4.4 of the paper.</p>
+            <center><img src="assets/imgs/flowchart.png" alt="flowchart" class="w-75 mb-3"></center>
+        </div>
+    </section>
+    <!-- End of AdaSubS Section -->
+
+    <!-- Experiments Section -->
+    <section id="experiments">
+        <div class="container">
+            <h6 class="section-subtitle text-center">The Results of</h6>
+            <h5 class="section-title text-center mb-6">Experimental Validation</h5>
+            <img src="assets/imgs/success_int_chart.png" alt="Line charts with success rate" class="w-100 mb-3">
+            <p>The two plots showcase the performance of three methods, AdaSubS, K-SubS, and BestFS, in terms of available budget i.e., graph size. The success rates of these methods are evaluated for in-distribution and out-of-distribution cases. The in-distribution performance (left figure) represents the success score on proofs of lengths 15 after being trained on the same length. The out-of-distribution (right figure) represents performance carried out on INT with a proof length of 20, while the training is performed on a proof length of 15. The plots provide insights into the effectiveness of these three methods, especially AdaSubS, for low budgets (~100) and high budgets (~1000).</p>
+        </div>
+    </section>
+    <!-- End of Experiments Section -->
+
+    <!-- OOD Section -->
+    <section>
+        <div class="container">
+            <h6 class="section-subtitle text-center">Generalizing</h6>
+            <h5 class="section-title text-center mb-6">Out-Of-Distribution</h5>
+            <p>Reinforcement learning algorithms are known for their brittleness when evaluated out of their training distribution. In contrast, AdaSubS is surprisingly resistant to various types of domain shifts.</p>
+<!--             <h5 class="text-center">Inequality Theorem Proving</h5> -->
+            <center><img src="assets/imgs/ood_int_blue_gray_big.png" alt="OOD results in the INT environment" class="w-75 mb-3"></center>
+            <p>We trained all the components to solve problems consisting of 15 steps and evaluated on twice more complex instances. AdaSubS solves more than half of the hardest problems, while its non-adaptive counterpart fails.</p>
+            <h5 class="text-center">Rubik's Cube</h5>
+            <p>As we know, each cube can be solved in at most 26 moves. To test generalization in that domain, we trained the pipeline on trajectories consisting of only 10 random moves. That distribution covers about 0.000000001% of possible configurations, mostly the easiest. Despite that gap, AdaSubS successfully solves more than 99% of fully scrambled cubes.</p>
+            <h5 class="text-center">Sokoban</h5>
+            <center><img src="assets/imgs/ood_sokoban.png" alt="OOD results in the Sokoban environment" class="w-75 mb-3"></center>
+            <p>The hardest aspect of the Sokoban puzzle is manipulating the boxes. Therefore, we tested AdaSubS on boards with increased number of boxes. Even in the most crowded scenarios, our hierarchical search succeeds.</p>
+        </div>
+    </section>
+    <!-- End of OOD Section -->
+    
+    <!-- Try AdaSubS Yourself -->
+    <section class="has-bg-img py-md">
+        <div class="container text-center">
+<!--             <h6 class="section-subtitle">An Example</h6> -->
+            <h6 class="section-title mb-6">Try AdaSubS Yourself!</h6>
+            <h6 class="subtitle">Run the pretrained checkpoints on custom instances with custom parameters</h6>
+            <a href="https://drive.google.com" class="btn btn-primary rounded w-lg btn-lg my-1">Notebook</a>
+        </div>
+    </section>
+    <!-- End Of Try AdaSubS Yourself -->
+    
+    <!-- Generating Section -->
+    <section id="generating">
+        <div class="container">
+            <h6 class="section-subtitle text-center mb-0">Explore</h6>
+            <h6 class="section-title text-center mb-3">Generating Subgoals</h6>
+            
+            <p>Below, we provide an interactive visualization of precomputed subgoals, which mimics the traces of AdaSubS execution for some Sokoban boards. To make the visualization more diverse, for each board, we present the 2-, 4-, and 8-subgoals, which are reachable (i.e., the ones verified by the low-level policy or the verifier). Subgoals for an arbitrary board can be generated in our colab.</p>
+            <ul>
+                <li>Click on the board images to expand the subgoal tree.</li>
+                <li>You can zoom using a mouse wheel and move the image by dragging the mouse.</li>
+                <li>A boarder will highlight the selected subgoals.</li>
+                <li>Green arrows show the low-level actions connecting two subgoals.</li>
+                <li>The amount of green arrows shown on the board indicates "k" in the subgoal generator.</li>
+            <ul>
+            <center><iframe src="subgoals.html" class="w-75"></iframe></center>
+        </div>
+    </section>
+    <!-- End of Generating Section -->
+    
+    <!-- Play Sokoban Section -->
+    <section id="play_sokoban">
+        <div class="container">
+            <h6 class="section-subtitle text-center">Play</h6>
+            <h5 class="section-title text-center mb-6">The Sokoban Game</h5>
+            <ul>
+                <li>Move Kenny using left, right, up, and down key arrows.</li>
+                <li>Move all the boxes to designated pink-bordered-cells.</li>
+                <li>Generate a new board using the 'Reset Board' button.</li>
+            <ul>
+            <center><iframe src="sokoban_game.html" class="w-75" style="border: 0;"></iframe></center>
+        </div>
+    </section>
+    <!-- End of Play Sokoban Section -->
+
+
+    <!-- Footer -->
+    <section class="has-bg-img py-0">
+        <div class="container">
+            <div class="footer">
+                <h6 class="section-subtitle text-center">Still Not Convinced?</h6>
+                <h5 class="section-title text-center mb-6">Chat With Us!</h5>
+<!--                 <p>Emails are provided in the paper.</p> -->
+            </div>    
+        </div>
+    </section>
+    <!-- End of Footer -->
+
+    <!-- core  -->
+    <script src="assets/vendors/jquery/jquery-3.4.1.js"></script>
+    <script src="assets/vendors/bootstrap/bootstrap.bundle.js"></script>
+
+    <!-- bootstrap affix -->
+    <script src="assets/vendors/bootstrap/bootstrap.affix.js"></script>
+
+    <!-- Creative Studio js -->
+    <script src="assets/js/creative-studio.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang='en'>
+<head>
+  <meta charset='UTF-8'>
+  <title>Sokoban</title>
+<style>
+
+html {
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  margin: 0;
+}
+
+h1 {
+  float: left;
+  font-size: 48pt;
+  margin: 10px 25px;
+}
+
+.light {
+  color: #eee;
+}
+
+.dark {
+  color: #444;
+}
+
+.canvas {
+    background-color: #aaa;
+    float: left;
+    width: 75%;
+    margin: 0;
+}
+
+#clickerWrapper {
+  top: 0;
+  z-index: 1;
+  display: flex;  /*block*/
+  margin: -40 0px;  /*top&bottom / left&right*/
+  position: relative;  /*relative*/
+  width: 320px;
+  /* left: 0px; */
+  /* padding-top: 5px; */
+  visibility: auto;
+}
+
+#clicker {
+  z-index: 1;
+  display: block;  /*block*/
+  font-family: Oswald;
+  font-size: 24px;
+  font-weight: 200;
+  color: #363636;
+  position: relative;
+  /* width: 80px; */
+  text-align: center;
+  width: 30%;
+  margin: 0 10px;
+  border: 1px solid;
+  border-color: #363636;
+  cursor: pointer;
+}
+</style>
+
+
+<script src='https://d3js.org/d3.v6.min.js'></script>
+<script type='text/javascript'>
+
+
+function buildTree(data) {
+  margin = ({ top: 100, right: 10, bottom: 10, left: 0 })
+  width = 260;
+  height = 200;
+  image_height = data.height
+  image_width = data.width
+  dx = 50;  // vertical
+  dy = 50;  // horizontal
+  tree = d3.tree().nodeSize([dx, dy])
+  diagonal = d3.linkHorizontal().x(d => d.y).y(d => d.x)  // Horizontal tree.
+  const root = d3.hierarchy(data);
+
+  root.x0 = width / 2;
+  root.y0 = 0;
+  root.descendants().forEach((d, i) => {
+    d.id = i;
+    d._children = d.children;
+    d.clicked = false;
+    d.children = null;  // INFO: COLLAPSE all nodes initially.
+  });
+
+  // Clear the canvas.
+  d3.select('#chart').selectAll('svg').remove();
+
+  // Add svg to the canvas.
+  const svg = d3.select('#chart').append('svg')
+    .attr('viewBox', [-margin.left, -margin.top, width, height])  // (x, y, width, height)
+    .style('font', '3px sans-serif')
+    .style('user-select', 'none')
+    .attr('width', '100%')
+    .attr('height', '100%');
+
+  const gLink = svg.append('g')
+    .attr('fill', 'none')
+    .attr('stroke', '#555')
+    .attr('stroke-opacity', 0.4)
+    .attr('stroke-width', 1.5);
+
+  const gNode = svg.append('g')
+    .attr('cursor', 'pointer')
+    .attr('pointer-events', 'all');
+
+  const duration = d3.event && d3.event.altKey ? 2500 : 250;
+
+  // INFO: function to traverse the graph from the root
+  //     and update the position of each node.
+  function customTree(source, i) {
+    const xs = [-dx, 0, dx];
+    if (source.depth == 0) {  // root
+      source.x = 0;
+      source.y = 0;
+    } else {
+      source.x = xs[i];
+      source.y = source.depth * dy;
+    }
+    if (!source.children) return;
+    for (let i = 0; i < source.children.length; i++) {
+      customTree(source.children[i], i);
+    }
+  }
+
+  function update(source) {
+    // INFO: disable all children for siblings of `source` node
+    //     before anything even happens.
+    gNode.selectAll('g')  // gNode = svg.append('g')
+      .data(root.descendants(), d => d.id)
+      .each(function (d) {
+        if (d.depth == source.depth && d != source) {
+          d.children = null;
+          d.clicked = false;
+        }
+      });
+
+    // INFO: `nodes` gives the list of nodes in the tree that are to be displayed.
+    //     Changes depending on which node was clicked (collapsed/expanded).
+    const nodes = root.descendants().reverse();
+    const links = root.links();
+
+    // INFO: sets all the new positions for the nodes.
+    customTree(root, 0);
+
+    // INFO: UNCLEAR purpose.
+    let left = root;
+    let right = root;
+    root.eachBefore(node => {
+      if (node.x < left.x) left = node;
+      if (node.x > right.x) right = node;
+    });
+
+    // // INFO: The animation that will be used when EXPANDING/COLLAPSING a node.
+    const transition = svg.transition()
+      .duration(duration)
+      .attr('viewBox', [-margin.left, -margin.top, width, height])
+      .tween('resize', window.ResizeObserver ? null : () => () => svg.dispatch('toggle'));
+
+    function addBorder(pointer) {
+      d3.select(pointer)  // Simulates a white fill.
+        .each(function (d) {console.log(d.data.width, d.data.height)})
+        .append('rect')
+        .lower()
+        .attr('x', d => -d.data.width * 2 + 'px') //'-12px')
+        .attr('y', d => -d.data.height * 2 + 'px') //'-12px')
+        .attr('width', d => +d.data.width * 4 + 'px') // '24px')  // need to adjust
+        .attr('height', d => +d.data.height * 4 + 'px') // '24px')  // need to adjust
+        .attr('stroke', 'transparent')
+        .attr('fill', 'white')
+      d3.select(pointer)  // Border.
+        .append('rect')
+        .lower()
+        .attr('x', d => -d.data.width * 2 - 1 + 'px') //'-13px')
+        .attr('y', d => -d.data.height * 2 - 1 + 'px') //'-13px')
+        .attr('width', d => +d.data.width * 4 + 2 + 'px') // '26px')  // need to adjust
+        .attr('height', d => +d.data.height * 4 + 2 + 'px') // '26px')  // need to adjust
+        .attr('stroke', 'transparent')
+        .attr('fill', 'black')
+    }
+
+    function removeBorder(pointer) {
+      d3.select(pointer).selectAll('rect').remove();
+    }
+
+    // Update the nodes…
+    const node = gNode.selectAll('g')  // gNode = svg.append('g')
+      .data(nodes, d => d.id);
+
+    // Enter any new nodes at the parent's previous position.
+    // INFO: Two cases:
+    // 1) Expand: we need to add nodes (|nodes| > |gNode.selectAll('g')|, where the former 
+    //    is the the number of currently displayed node). Hence enter() will be called. 
+    //    And we need to give the newly displayed nodes the clicability utility.
+    // 2) Collapse: we need to remove nodes (|nodes| < |gNode.selectAll('g')|). 
+    //    Hence enter() (and the whole following block) is not executed. Later we call exit.
+    const nodeEnter = node.enter().append('g')
+      // INFO: At first move every new node to the source (node to be expanded) position.
+      //     Later we will move them to the correct position, see `nodeUpdate`.
+      .attr('transform', d => `translate(${source.y0},${source.x0})`)
+      // INFO: Since this is not they're final position, we need to hide them.
+      .attr('fill-opacity', 0)
+      .attr('stroke-opacity', 0)
+      // INFO: make the newly displayed nodes clickable.
+      .on('click', (event, d) => {
+        d.children = d.children ? null : d._children;
+        d.clicked = !d.clicked;
+        update(d);
+      });
+
+    // // INFO: Add and format visualization of each node (circle).
+    // //     The nodes with subtrees are darker.
+    // nodeEnter.append('circle')
+    //   .attr('r', 2.5)
+    //   .attr('fill', d => d._children ? '#555' : '#999')
+    //   .attr('stroke-width', 10)
+
+    // // INFO: Add and format text.
+    // nodeEnter.append('text')
+    //   .attr('dy', '0.31em')
+    //   .attr('x', d => d._children ? -6 : 6)
+    //   .attr('text-anchor', d => d._children ? 'end' : 'start')
+    //   .text(d => d.data.name)
+    //   // INFO: Add a white border to the text.
+    //   //     Formally, copy the text, make it white and larger.
+    //   .clone(true).lower()
+    //   .attr('stroke-linejoin', 'round')
+    //   .attr('stroke-width', 3)
+    //   .attr('stroke', 'white');
+
+    // INFO: Display images for NEW nodes (from `nodeEnter` selection).
+    //     We place 'mousover' and 'mousout' here and not in `nodeUpdate`
+    //     (that make the subogal image to be sligtly transparent)
+    //     to avoid seein the link underneath the image. Due to this, we 
+    //     need to call `addBorder` and `removeBorder` with `this.parentNode`.
+    nodeEnter.append('image')
+      .attr('xlink:href', d => d.data.image)
+      .attr('x', d => -d.data.width * 2 + 'px')  // '-12px'
+      .attr('y', d => -d.data.height * 2 + 'px')  // '-12px'
+      .attr('width', d => d.data.width * 4 + 'px')  // '24px'
+      .attr('height', d => d.data.height * 4 + 'px')  // '24px'
+      // INFO: Hightlight the node on mouseover (border + opacity).
+      .on('mouseover', function (d) {
+        d3.select(this)
+          .style('opacity', '0.8')
+          .style('cursor', 'pointer')
+        if (d3.select(this.parentNode).select('rect').empty()) {
+          addBorder(this.parentNode);
+        }
+      })
+      // INFO: remove border only if the node is not clicked.
+      .on('mouseout', function (event, d) {
+        d3.select(this)
+          .style('opacity', '1.0')
+        d3.select(this)
+        if (!d.clicked) removeBorder(this.parentNode);
+      })
+
+    // Transition nodes to their new position.
+    // INFO: This is the part when we EXPAND the tree.
+    //     Move the nodes to the correct position.
+    //     `node` selection only holds the nodes that are already displayed.
+    //     Hence we need to merge the new nodes `nodeEnter` with the old ones.
+    //     Use `transition` tween animation.
+    const nodeUpdate = node.merge(nodeEnter).transition(transition)
+      // INFO: Move the nodes to the correct position.
+      .attr('transform', d => `translate(${d.y},${d.x})`)
+      // INFO: Make the nodes visible.
+      .attr('fill-opacity', 1)
+      .attr('stroke-opacity', 1);
+
+    // Transition exiting nodes to the parent's new position.
+    // INFO: This is the part when we COLLAPSE the tree.
+    //     `node` holds nodes to be displayed and we are COLLAPSING.
+    //     So we remove nodes to be collapsed.
+    //     These nodes are the ones that are not matched in `node` selection.
+    //     Hence we take not matched nodes from `node.exit()` and remove.
+    //     Use `transition` tween animation.
+    // INFO: I guess `remove()` will remove the nodes from the DOM, and 
+    //     returns the selection of removed nodes.
+    // INFO: `remove()` removes the border as well (removes everything).
+    const nodeExit = node.exit().transition(transition).remove()
+      .attr('transform', d => `translate(${source.y},${source.x})`)
+      // INFO: Make the removed nodes invisible.
+      .attr('fill-opacity', 0)
+      .attr('stroke-opacity', 0)
+
+    // INFO: Plot border for each clicked node.
+    nodeUpdate.each(function(d) {
+      // INFO: If clicked and visible and no border, add border.
+      if (d.clicked && d3.select(this).selectAll('rect').empty()) {
+        addBorder(this)
+      }
+      if (!d.clicked && !d3.select(this).selectAll('rect').empty()) {
+        removeBorder(this)
+      }
+    })
+
+    // Update the links…
+    // INFO: Again, two cases EXPAND and COLLAPSE (see comment above).
+    const link = gLink.selectAll('path')
+      .data(links, d => d.target.id);
+
+    // Enter any new links at the parent's previous position.
+    // INFO: the following two blocks are for the same case:
+    //     1) We set 
+    // INFO: EXPAND case (void for COLLAPSE). Apply to NEW links.
+    const linkEnter = link.enter().append('path')
+      // INFO: Sets the starting position for the link.
+      //     During the animation/transition below, 
+      //     the link will move from this position to the correct one.
+      .attr('d', d => {
+        const o = { x: source.x0, y: source.y0 };
+        return diagonal({ source: o, target: o });
+      });
+
+    // Transition links to their new position.
+    // INFO: EXPAND case, apply changes to ALL links.
+    //     Merge new links with old ones.
+    //     Apply the transition from the staring position
+    //     set in the previous code block, to the correct node's position.
+    link.merge(linkEnter).transition(transition)
+      .attr('d', diagonal);
+
+    // Transition exiting nodes to the parent's new position.
+    // INFO: COLLAPSE case: remove and apply changes to removed links.
+    //     UNCLEAR: what does diagonal do?
+    link.exit().transition(transition).remove()
+      .attr('d', d => {
+        const o = { x: source.x, y: source.y };
+        return diagonal({ source: o, target: o });
+      });
+
+    // Stash the old positions for transition.
+    // INFO: x0 and y0 are the old positions.
+    root.eachBefore(d => {
+      d.x0 = d.x;
+      d.y0 = d.y;
+    });
+
+    const zoom = svg.call(d3.zoom()
+      .extent([[0, 0], [width, height]])
+      .scaleExtent([0.1, 10])
+      .on('zoom', zoomed))
+      // // INFO: unregister event listners (disable drag)
+      // .on('mousedown.zoom', null)
+      // .on('touchstart.zoom', null)
+      // .on('touchmove.zoom', null)
+      // .on('touchend.zoom', null);
+
+    function zoomed(event, d) {
+      gNode.attr('transform', event.transform);
+      gLink.attr('transform', event.transform);
+    }
+
+    svg.call(d3.drag()
+      .on('start', dragstarted)
+      .on('drag', dragged)
+      .on('end', dragended));
+
+    function dragstarted() {
+      d3.select(this).raise();
+      g.attr('cursor', 'grabbing');
+    }
+
+    function dragged(d) {
+      d3.select(this).attr('cx', d.x = d3.event.x).attr('cy', d.y = d3.event.y);
+    }
+
+    function dragended() {
+      g.attr('cursor', 'grab');
+    }
+  }
+
+  update(root);
+
+  d3.select('source').attr('src', '/movie?' + Math.random() * Math.random());
+}
+</script>
+
+</head>
+<body>
+<div id='chart'></div>
+<div id='cont' class='container-fluid'>
+    <div class='row text-center'>
+        <div class='col-md-12'>
+            <div id='clickerWrapper'>
+                <div id='clicker'>Reset</div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+
+<script type='text/javascript'>
+    const tree0={'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_0_0.png','height':'5','width':'9','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_1_0.png','height':'5','width':'9','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_2_0.png','height':'5','width':'9','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_2_1.png','height':'5','width':'9','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_3_0.png','height':'5','width':'9','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_3_1.png','height':'5','width':'9','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_3_2.png','height':'5','width':'9','children':[]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_2_2.png','height':'5','width':'9','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_3_3.png','height':'5','width':'9','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_3_4.png','height':'5','width':'9','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_3_5.png','height':'5','width':'9','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_4_0.png','height':'5','width':'9','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_4_1.png','height':'5','width':'9','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_4_2.png','height':'5','width':'9','children':[]}]}]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_1_1.png','height':'5','width':'9','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_2_3.png','height':'5','width':'9','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_3_6.png','height':'5','width':'9','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_3_7.png','height':'5','width':'9','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_3_8.png','height':'5','width':'9','children':[]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_2_4.png','height':'5','width':'9','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_3_9.png','height':'5','width':'9','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_3_10.png','height':'5','width':'9','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_4_3.png','height':'5','width':'9','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_4_4.png','height':'5','width':'9','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_4_5.png','height':'5','width':'9','children':[]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_3_11.png','height':'5','width':'9','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_4_6.png','height':'5','width':'9','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_4_7.png','height':'5','width':'9','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_4_8.png','height':'5','width':'9','children':[]}]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_2_5.png','height':'5','width':'9','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_3_12.png','height':'5','width':'9','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_3_13.png','height':'5','width':'9','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_4_9.png','height':'5','width':'9','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_4_10.png','height':'5','width':'9','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_4_11.png','height':'5','width':'9','children':[]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_3_14.png','height':'5','width':'9','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_4_12.png','height':'5','width':'9','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_4_13.png','height':'5','width':'9','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_4_14.png','height':'5','width':'9','children':[]}]}]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_1_2.png','height':'5','width':'9','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_2_6.png','height':'5','width':'9','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_3_15.png','height':'5','width':'9','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_3_16.png','height':'5','width':'9','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_3_17.png','height':'5','width':'9','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_4_15.png','height':'5','width':'9','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_4_16.png','height':'5','width':'9','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_4_17.png','height':'5','width':'9','children':[]}]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_2_7.png','height':'5','width':'9','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_3_18.png','height':'5','width':'9','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_3_19.png','height':'5','width':'9','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_4_18.png','height':'5','width':'9','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_4_19.png','height':'5','width':'9','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_4_20.png','height':'5','width':'9','children':[]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_3_20.png','height':'5','width':'9','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_4_21.png','height':'5','width':'9','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_4_22.png','height':'5','width':'9','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_4_23.png','height':'5','width':'9','children':[]}]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_2_8.png','height':'5','width':'9','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_3_21.png','height':'5','width':'9','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_4_24.png','height':'5','width':'9','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_4_25.png','height':'5','width':'9','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_4_26.png','height':'5','width':'9','children':[]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_3_22.png','height':'5','width':'9','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_4_27.png','height':'5','width':'9','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_4_28.png','height':'5','width':'9','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_4_29.png','height':'5','width':'9','children':[]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_3_23.png','height':'5','width':'9','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_4_30.png','height':'5','width':'9','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_4_31.png','height':'5','width':'9','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_0/tree_0_4_32.png','height':'5','width':'9','children':[]}]}]}]}]};
+
+    const tree1={'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_0_0.png','height':'4','width':'7','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_1_0.png','height':'4','width':'7','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_2_0.png','height':'4','width':'7','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_2_1.png','height':'4','width':'7','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_3_0.png','height':'4','width':'7','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_3_1.png','height':'4','width':'7','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_3_2.png','height':'4','width':'7','children':[]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_2_2.png','height':'4','width':'7','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_3_3.png','height':'4','width':'7','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_3_4.png','height':'4','width':'7','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_3_5.png','height':'4','width':'7','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_4_0.png','height':'4','width':'7','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_4_1.png','height':'4','width':'7','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_4_2.png','height':'4','width':'7','children':[]}]}]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_1_1.png','height':'4','width':'7','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_2_3.png','height':'4','width':'7','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_3_6.png','height':'4','width':'7','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_3_7.png','height':'4','width':'7','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_3_8.png','height':'4','width':'7','children':[]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_2_4.png','height':'4','width':'7','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_3_9.png','height':'4','width':'7','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_3_10.png','height':'4','width':'7','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_4_3.png','height':'4','width':'7','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_4_4.png','height':'4','width':'7','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_4_5.png','height':'4','width':'7','children':[]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_3_11.png','height':'4','width':'7','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_4_6.png','height':'4','width':'7','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_4_7.png','height':'4','width':'7','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_4_8.png','height':'4','width':'7','children':[]}]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_2_5.png','height':'4','width':'7','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_3_12.png','height':'4','width':'7','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_3_13.png','height':'4','width':'7','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_4_9.png','height':'4','width':'7','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_4_10.png','height':'4','width':'7','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_4_11.png','height':'4','width':'7','children':[]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_3_14.png','height':'4','width':'7','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_4_12.png','height':'4','width':'7','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_4_13.png','height':'4','width':'7','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_4_14.png','height':'4','width':'7','children':[]}]}]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_1_2.png','height':'4','width':'7','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_2_6.png','height':'4','width':'7','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_3_15.png','height':'4','width':'7','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_3_16.png','height':'4','width':'7','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_3_17.png','height':'4','width':'7','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_4_15.png','height':'4','width':'7','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_4_16.png','height':'4','width':'7','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_4_17.png','height':'4','width':'7','children':[]}]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_2_7.png','height':'4','width':'7','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_3_18.png','height':'4','width':'7','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_3_19.png','height':'4','width':'7','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_4_18.png','height':'4','width':'7','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_4_19.png','height':'4','width':'7','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_4_20.png','height':'4','width':'7','children':[]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_3_20.png','height':'4','width':'7','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_4_21.png','height':'4','width':'7','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_4_22.png','height':'4','width':'7','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_4_23.png','height':'4','width':'7','children':[]}]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_2_8.png','height':'4','width':'7','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_3_21.png','height':'4','width':'7','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_4_24.png','height':'4','width':'7','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_4_25.png','height':'4','width':'7','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_4_26.png','height':'4','width':'7','children':[]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_3_22.png','height':'4','width':'7','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_4_27.png','height':'4','width':'7','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_4_28.png','height':'4','width':'7','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_4_29.png','height':'4','width':'7','children':[]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_3_23.png','height':'4','width':'7','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_4_30.png','height':'4','width':'7','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_4_31.png','height':'4','width':'7','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_1/tree_1_4_32.png','height':'4','width':'7','children':[]}]}]}]}]};
+
+    const tree2={'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_0_0.png','height':'9','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_1_0.png','height':'9','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_2_0.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_2_1.png','height':'9','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_3_0.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_3_1.png','height':'9','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_0.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_1.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_2.png','height':'9','width':'10','children':[]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_3_2.png','height':'9','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_3.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_4.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_5.png','height':'9','width':'10','children':[]}]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_2_2.png','height':'9','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_3_3.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_3_4.png','height':'9','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_6.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_7.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_8.png','height':'9','width':'10','children':[]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_3_5.png','height':'9','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_9.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_10.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_11.png','height':'9','width':'10','children':[]}]}]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_1_1.png','height':'9','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_2_3.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_2_4.png','height':'9','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_3_6.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_3_7.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_3_8.png','height':'9','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_12.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_13.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_14.png','height':'9','width':'10','children':[]}]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_2_5.png','height':'9','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_3_9.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_3_10.png','height':'9','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_15.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_16.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_17.png','height':'9','width':'10','children':[]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_3_11.png','height':'9','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_18.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_19.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_20.png','height':'9','width':'10','children':[]}]}]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_1_2.png','height':'9','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_2_6.png','height':'9','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_3_12.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_3_13.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_3_14.png','height':'9','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_21.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_22.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_23.png','height':'9','width':'10','children':[]}]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_2_7.png','height':'9','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_3_15.png','height':'9','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_24.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_25.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_26.png','height':'9','width':'10','children':[]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_3_16.png','height':'9','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_27.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_28.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_29.png','height':'9','width':'10','children':[]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_3_17.png','height':'9','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_30.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_31.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_32.png','height':'9','width':'10','children':[]}]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_2_8.png','height':'9','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_3_18.png','height':'9','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_33.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_34.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_35.png','height':'9','width':'10','children':[]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_3_19.png','height':'9','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_36.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_37.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_38.png','height':'9','width':'10','children':[]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_3_20.png','height':'9','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_39.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_40.png','height':'9','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_2/tree_2_4_41.png','height':'9','width':'10','children':[]}]}]}]}]};
+
+    const tree3={'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_3/tree_3_0_0.png','height':'5','width':'4','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_3/tree_3_1_0.png','height':'5','width':'4','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_3/tree_3_2_0.png','height':'5','width':'4','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_3/tree_3_2_1.png','height':'5','width':'4','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_3/tree_3_2_2.png','height':'5','width':'4','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_3/tree_3_3_0.png','height':'5','width':'4','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_3/tree_3_3_1.png','height':'5','width':'4','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_3/tree_3_3_2.png','height':'5','width':'4','children':[]}]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_3/tree_3_1_1.png','height':'5','width':'4','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_3/tree_3_2_3.png','height':'5','width':'4','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_3/tree_3_2_4.png','height':'5','width':'4','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_3/tree_3_2_5.png','height':'5','width':'4','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_3/tree_3_3_3.png','height':'5','width':'4','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_3/tree_3_3_4.png','height':'5','width':'4','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_3/tree_3_3_5.png','height':'5','width':'4','children':[]}]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_3/tree_3_1_2.png','height':'5','width':'4','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_3/tree_3_2_6.png','height':'5','width':'4','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_3/tree_3_2_7.png','height':'5','width':'4','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_3/tree_3_2_8.png','height':'5','width':'4','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_3/tree_3_3_6.png','height':'5','width':'4','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_3/tree_3_3_7.png','height':'5','width':'4','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_3/tree_3_3_8.png','height':'5','width':'4','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_3/tree_3_4_0.png','height':'5','width':'4','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_3/tree_3_4_1.png','height':'5','width':'4','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_3/tree_3_4_2.png','height':'5','width':'4','children':[]}]}]}]}]};
+
+    const tree4={'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_0_0.png','height':'7','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_1_0.png','height':'7','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_2_0.png','height':'7','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_3_0.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_3_1.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_3_2.png','height':'7','width':'10','children':[]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_2_1.png','height':'7','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_3_3.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_3_4.png','height':'7','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_0.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_1.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_2.png','height':'7','width':'10','children':[]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_3_5.png','height':'7','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_3.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_4.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_5.png','height':'7','width':'10','children':[]}]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_2_2.png','height':'7','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_3_6.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_3_7.png','height':'7','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_6.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_7.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_8.png','height':'7','width':'10','children':[]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_3_8.png','height':'7','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_9.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_10.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_11.png','height':'7','width':'10','children':[]}]}]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_1_1.png','height':'7','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_2_3.png','height':'7','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_3_9.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_3_10.png','height':'7','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_12.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_13.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_14.png','height':'7','width':'10','children':[]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_3_11.png','height':'7','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_15.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_16.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_17.png','height':'7','width':'10','children':[]}]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_2_4.png','height':'7','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_3_12.png','height':'7','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_18.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_19.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_20.png','height':'7','width':'10','children':[]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_3_13.png','height':'7','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_21.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_22.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_23.png','height':'7','width':'10','children':[]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_3_14.png','height':'7','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_24.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_25.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_26.png','height':'7','width':'10','children':[]}]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_2_5.png','height':'7','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_3_15.png','height':'7','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_27.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_28.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_29.png','height':'7','width':'10','children':[]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_3_16.png','height':'7','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_30.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_31.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_32.png','height':'7','width':'10','children':[]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_3_17.png','height':'7','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_33.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_34.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_35.png','height':'7','width':'10','children':[]}]}]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_1_2.png','height':'7','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_2_6.png','height':'7','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_3_18.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_3_19.png','height':'7','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_36.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_37.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_38.png','height':'7','width':'10','children':[]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_3_20.png','height':'7','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_39.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_40.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_41.png','height':'7','width':'10','children':[]}]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_2_7.png','height':'7','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_3_21.png','height':'7','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_42.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_43.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_44.png','height':'7','width':'10','children':[]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_3_22.png','height':'7','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_45.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_46.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_47.png','height':'7','width':'10','children':[]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_3_23.png','height':'7','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_48.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_49.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_50.png','height':'7','width':'10','children':[]}]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_2_8.png','height':'7','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_3_24.png','height':'7','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_51.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_52.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_53.png','height':'7','width':'10','children':[]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_3_25.png','height':'7','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_54.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_55.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_56.png','height':'7','width':'10','children':[]}]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_3_26.png','height':'7','width':'10','children':[{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_57.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_58.png','height':'7','width':'10','children':[]},{'image':'https://mimuw.edu.pl/~lkucinski/sokoban_tree/data/tree_4/tree_4_4_59.png','height':'7','width':'10','children':[]}]}]}]}]};
+
+    const data_array = [tree0, tree1, tree2, tree3];
+    console.log(data_array);
+    console.log(data_array[0]);
+    console.log(data_array.length);
+
+    function init() {
+        const idx = Math.floor(Math.random() * data_array.length);
+console.log(idx);
+        const data = data_array[idx];
+        buildTree(data);
+    };
+    init();
+
+    d3.select('#clicker')
+        .on('click', function(e) {
+            init();
+        });
+</script>
+</html>
+
+	
